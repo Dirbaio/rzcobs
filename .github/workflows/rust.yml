@@ -1,0 +1,27 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: install
+        run: rustup target add thumbv7em-none-eabi
+      - name: Test
+        run: cargo test
+      - name: Build no_std
+        run: cargo build --target thumbv7em-none-eabi --no-default-features

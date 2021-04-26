@@ -1,0 +1,24 @@
+[package]
+name = "rzcobs"
+version = "0.1.1"
+authors = ["Dario Nieuwenhuis <dirbaio@dirbaio.net>"]
+description = "Reverse-Zerocompressing-COBS encoding"
+repository = "https://github.com/Dirbaio/rzcobs"
+edition = "2018"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+
+categories = [
+    "embedded",
+    "no-std",
+    "encoding",
+]
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+
+[dev-dependencies]
+hex-literal = "0.3.1"
