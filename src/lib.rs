@@ -18,7 +18,7 @@ pub trait Write {
 /// You may use the same Encoder instance to encode multiple messages. In this case, you
 /// will probably want to separate messages with a `0x00`, which you have to write manually
 /// after calling [end](Self::end), for example with `encoder.writer().write(0)`.
-pub struct Encoder<W: Write> {
+pub struct Encoder<W> {
     w: W,
     run: u8,
     zeros: u8,
@@ -35,9 +35,9 @@ pub struct Encoder<W: Write> {
 //   1nnnnnnn => output n+7 bytes from stream, output 0x00
 //   11111111 => output 134 bytes from stream
 
-impl<W: Write> Encoder<W> {
+impl<W> Encoder<W> {
     /// Create a new encoder with the given writer.
-    pub fn new(w: W) -> Self {
+    pub const fn new(w: W) -> Self {
         Self {
             w,
             run: 0,
@@ -49,6 +49,9 @@ impl<W: Write> Encoder<W> {
     pub fn writer(&mut self) -> &mut W {
         &mut self.w
     }
+}
+
+impl<W: Write> Encoder<W> {
 
     /// Write a message byte.
     pub fn write(&mut self, byte: u8) -> Result<(), W::Error> {
