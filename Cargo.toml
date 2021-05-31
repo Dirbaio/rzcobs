@@ -1,6 +1,6 @@
 [package]
 name = "rzcobs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Dario Nieuwenhuis <dirbaio@dirbaio.net>"]
 description = "Reverse-Zerocompressing-COBS encoding"
 repository = "https://github.com/Dirbaio/rzcobs"
