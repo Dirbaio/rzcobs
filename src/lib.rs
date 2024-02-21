@@ -52,7 +52,6 @@ impl<W> Encoder<W> {
 }
 
 impl<W: Write> Encoder<W> {
-
     /// Write a message byte.
     pub fn write(&mut self, byte: u8) -> Result<(), W::Error> {
         if self.run < 7 {
@@ -90,7 +89,7 @@ impl<W: Write> Encoder<W> {
     /// if you so desire.
     pub fn end(&mut self) -> Result<(), W::Error> {
         match self.run {
-            0 => {},
+            0 => {}
             1..=6 => self.w.write((self.zeros | (0xFF << self.run)) & 0x7F)?,
             _ => self.w.write((self.run - 7) | 0x80)?,
         }
@@ -139,35 +138,7 @@ pub struct MalformedError;
 #[cfg(feature = "std")]
 pub fn decode(data: &[u8]) -> Result<Vec<u8>, MalformedError> {
     let mut res = vec![];
-    let mut data = data.iter().rev().cloned();
-    while let Some(x) = data.next() {
-        match x {
-            0 => return Err(MalformedError),
-            0x01..=0x7f => {
-                for i in 0..7 {
-                    if x & (1 << (6-i)) == 0 {
-                        res.push(data.next().ok_or(MalformedError)?);
-                    } else {
-                        res.push(0);
-                    }
-                }
-            }
-            0x80..=0xfe => {
-                let n = (x & 0x7f) + 7;
-                res.push(0);
-                for _ in 0..n {
-                    res.push(data.next().ok_or(MalformedError)?);
-                }
-            }
-            0xff => {
-                for _ in 0..134 {
-                    res.push(data.next().ok_or(MalformedError)?);
-                }
-            }
-        }
-    }
-
-    res.reverse();
+    decode_helper(data, &mut res).map_err(|_| MalformedError)?;
     Ok(res)
 }
 
@@ -175,6 +146,24 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>, MalformedError> {
 pub enum DecodeError {
     MalformedError,
     BufferOverflow,
+}
+
+/// Collections that allow pushing u8 and reversing the element order in place
+trait Buffer {
+    fn try_push(&mut self, x: u8) -> Result<(), DecodeError>;
+    fn rev(&mut self);
+}
+
+impl Buffer for Vec<u8> {
+    fn try_push(&mut self, x: u8) -> Result<(), DecodeError> {
+        Vec::<u8>::push(self, x);
+
+        Ok(())
+    }
+
+    fn rev(&mut self) {
+        self.reverse();
+    }
 }
 
 /// Decode a full message.
@@ -187,7 +176,7 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
         len: usize,
     }
 
-    impl<'a> Vec<'a> {
+    impl<'a> Buffer for Vec<'a> {
         fn try_push(&mut self, x: u8) -> Result<(), DecodeError> {
             *self
                 .data
@@ -198,13 +187,18 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
             Ok(())
         }
 
-        fn reverse(&mut self) {
+        fn rev(&mut self) {
             self.data[..self.len].reverse()
         }
     }
 
     let mut res = Vec { data: res, len: 0 };
+    decode_helper(data, &mut res)?;
 
+    Ok(&mut res.data[..res.len])
+}
+
+fn decode_helper(data: &[u8], dst: &mut impl Buffer) -> Result<(), DecodeError> {
     let mut data = data.iter().rev().cloned();
     while let Some(x) = data.next() {
         match x {
@@ -212,29 +206,29 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
             0x01..=0x7f => {
                 for i in 0..7 {
                     if x & (1 << (6 - i)) == 0 {
-                        res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                        dst.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
                     } else {
-                        res.try_push(0)?;
+                        dst.try_push(0)?;
                     }
                 }
             }
             0x80..=0xfe => {
                 let n = (x & 0x7f) + 7;
-                res.try_push(0)?;
+                dst.try_push(0)?;
                 for _ in 0..n {
-                    res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                    dst.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
                 }
             }
             0xff => {
                 for _ in 0..134 {
-                    res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                    dst.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
                 }
             }
         }
     }
 
-    res.reverse();
-    Ok(&mut res.data[..res.len])
+    dst.rev();
+    Ok(())
 }
 
 #[cfg(feature = "std")]
@@ -305,13 +299,17 @@ mod tests {
                 &hex!("0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283848586ff7f"),
             ),
         ];
-
+        let mut scratch = [0; 141];
         for (dec, enc) in tests {
             assert_eq!(&encode(dec), enc);
 
             let got = decode(enc).unwrap();
             assert_eq!(&got[..dec.len()], *dec);
             assert!(&got[dec.len()..].iter().all(|&x| x == 0));
+
+            let got_slice = decode_to_slice(enc, &mut scratch).unwrap();
+            assert_eq!(&got_slice[..dec.len()], *dec);
+            assert!(&got_slice[dec.len()..].iter().all(|&x| x == 0));
         }
     }
 }
