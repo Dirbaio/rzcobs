@@ -154,6 +154,7 @@ trait Buffer {
     fn rev(&mut self);
 }
 
+#[cfg(feature = "std")]
 impl Buffer for Vec<u8> {
     fn try_push(&mut self, x: u8) -> Result<(), DecodeError> {
         Vec::<u8>::push(self, x);
