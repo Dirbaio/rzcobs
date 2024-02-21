@@ -189,7 +189,10 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
 
     impl<'a> Vec<'a> {
         fn try_push(&mut self, x: u8) -> Result<(), DecodeError> {
-            *self.data.get_mut(self.len).ok_or(DecodeError::BufferOverflow)? = x;
+            *self
+                .data
+                .get_mut(self.len)
+                .ok_or(DecodeError::BufferOverflow)? = x;
             self.len += 1;
 
             Ok(())
@@ -200,7 +203,7 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
         }
     }
 
-    let mut res = Vec{ data: res, len: 0 };
+    let mut res = Vec { data: res, len: 0 };
 
     let mut data = data.iter().rev().cloned();
     while let Some(x) = data.next() {
@@ -208,7 +211,7 @@ pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8
             0 => return Err(DecodeError::MalformedError),
             0x01..=0x7f => {
                 for i in 0..7 {
-                    if x & (1 << (6-i)) == 0 {
+                    if x & (1 << (6 - i)) == 0 {
                         res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
                     } else {
                         res.try_push(0)?;
