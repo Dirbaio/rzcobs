@@ -171,6 +171,69 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>, MalformedError> {
     Ok(res)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecodeError {
+    MalformedError,
+    BufferOverflow,
+}
+
+/// Decode a full message.
+///
+/// `data` must be a full rzCOBS encoded message. Decoding partial
+/// messages is not possible. `data` must NOT include any `0x00` separator byte.
+pub fn decode_to_slice<'a>(data: &[u8], res: &'a mut [u8]) -> Result<&'a mut [u8], DecodeError> {
+    struct Vec<'a> {
+        data: &'a mut [u8],
+        len: usize,
+    }
+
+    impl<'a> Vec<'a> {
+        fn try_push(&mut self, x: u8) -> Result<(), DecodeError> {
+            *self.data.get_mut(self.len).ok_or(DecodeError::BufferOverflow)? = x;
+            self.len += 1;
+
+            Ok(())
+        }
+
+        fn reverse(&mut self) {
+            self.data[..self.len].reverse()
+        }
+    }
+
+    let mut res = Vec{ data: res, len: 0 };
+
+    let mut data = data.iter().rev().cloned();
+    while let Some(x) = data.next() {
+        match x {
+            0 => return Err(DecodeError::MalformedError),
+            0x01..=0x7f => {
+                for i in 0..7 {
+                    if x & (1 << (6-i)) == 0 {
+                        res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                    } else {
+                        res.try_push(0)?;
+                    }
+                }
+            }
+            0x80..=0xfe => {
+                let n = (x & 0x7f) + 7;
+                res.try_push(0)?;
+                for _ in 0..n {
+                    res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                }
+            }
+            0xff => {
+                for _ in 0..134 {
+                    res.try_push(data.next().ok_or(DecodeError::MalformedError)?)?;
+                }
+            }
+        }
+    }
+
+    res.reverse();
+    Ok(&mut res.data[..res.len])
+}
+
 #[cfg(feature = "std")]
 #[cfg(test)]
 mod tests {
